@@ -1,0 +1,71 @@
+module "eks" {
+  source = "terraform-aws-modules/eks/aws"
+
+  cluster_name                    = var.environment
+  cluster_version                 = var.eks_version
+  cluster_endpoint_private_access = true
+  cluster_endpoint_public_access  = true
+
+  vpc_id          = data.aws_vpc.selected.id
+  subnet_ids      = data.aws_subnets.private.ids
+
+  enable_irsa = true
+
+  cluster_addons = {
+    # coredns = {
+    #   resolve_conflicts = "OVERWRITE"
+    #   addon_version = var.coredns_addon_version
+    # }
+    kube-proxy = {
+      addon_version = var.kubeproxy_addon_version
+    }
+    vpc-cni = {
+      resolve_conflicts = "OVERWRITE"
+      addon_version     = var.cni_addon_version
+      service_account_role_arn = module.vpc_cni_irsa.iam_role_arn
+    }
+  }
+
+  eks_managed_node_group_defaults = {
+    vpc_security_group_ids     = [data.aws_security_group.eks-nodes.id]
+    disk_size                  = var.disk_size
+    iam_role_attach_cni_policy = false
+  }
+
+  eks_managed_node_groups = {
+    general = {
+      name = "eks-general-${random_string.suffix.result}"
+
+      ami_type     = "AL2_x86_64"
+
+      ami_id       = var.general_ami
+
+      min_size     = var.min_capacity_general
+      max_size     = var.max_capacity_general
+      desired_size = var.desired_capacity_general
+
+      instance_types = [var.instance_type_general]
+      capacity_type  = "ON_DEMAND"
+      labels = {
+        Environment = var.environment
+      }
+    }
+    localstorage = {
+      name = "eks-local-storage-${random_string.suffix.result}"
+
+      ami_type     = "AL2_ARM_64"
+
+      ami_id       = var.localstorage_ami
+
+      min_size     = var.min_capacity_local_storage
+      max_size     = var.max_capacity_local_storage
+      desired_size = var.desired_capacity_local_storage
+
+      instance_types = [var.instance_type_local_storage]
+      capacity_type  = "ON_DEMAND"
+      labels = {
+        Environment = var.environment
+      }
+    }
+  }
+}
